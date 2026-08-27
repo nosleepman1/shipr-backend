@@ -9,18 +9,33 @@ import (
 )
 
 type Config struct {
-	Port              string
-	DatabaseURL       string
-	RedisURL          string
-	CaddyAdminURL     string
-	BaseDomain        string
-	MasterKey         string
-	JWTSecret         string
-	JWTExpiresIn      int64
-	DockerNetwork     string
-	BuildStorageDir   string
-	Environment       string
-	FrontendURL       string
+	Port               string
+	DatabaseURL        string
+	RedisURL           string
+	CaddyAdminURL      string
+	BaseDomain         string
+	MasterKey          string
+	JWTSecret          string
+	JWTExpiresIn       int64
+	DockerNetwork      string
+	BuildStorageDir    string
+	Environment        string
+	FrontendURL        string
+	APIBaseURL         string
+
+	// PayDunya Billing
+	PaydunyaMasterKey  string
+	PaydunyaPrivateKey string
+	PaydunyaToken      string
+	PaydunyaMode       string
+
+	// OAuth2 Providers
+	GithubClientID     string
+	GithubClientSecret string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GitlabClientID     string
+	GitlabClientSecret string
 }
 
 func Load() *Config {
@@ -39,6 +54,21 @@ func Load() *Config {
 	buildStorageDir := getEnv("BUILD_STORAGE_DIR", "./tmp/shipr-builds")
 	environment := getEnv("ENVIRONMENT", "development")
 	frontendURL := getEnv("FRONTEND_URL", "http://localhost:3000")
+	apiBaseURL := getEnv("API_BASE_URL", "http://localhost:8080")
+
+	// PayDunya
+	paydunyaMasterKey := getEnv("PAYDUNYA_MASTER_KEY", "")
+	paydunyaPrivateKey := getEnv("PAYDUNYA_PRIVATE_KEY", "")
+	paydunyaToken := getEnv("PAYDUNYA_TOKEN", "")
+	paydunyaMode := getEnv("PAYDUNYA_MODE", "test")
+
+	// OAuth2
+	githubClientID := getEnv("GITHUB_CLIENT_ID", "")
+	githubClientSecret := getEnv("GITHUB_CLIENT_SECRET", "")
+	googleClientID := getEnv("GOOGLE_CLIENT_ID", "")
+	googleClientSecret := getEnv("GOOGLE_CLIENT_SECRET", "")
+	gitlabClientID := getEnv("GITLAB_CLIENT_ID", "")
+	gitlabClientSecret := getEnv("GITLAB_CLIENT_SECRET", "")
 
 	jwtExpiresInStr := getEnv("JWT_EXPIRES_IN", "86400")
 	jwtExpiresIn, err := strconv.ParseInt(jwtExpiresInStr, 10, 64)
@@ -51,18 +81,29 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:            port,
-		DatabaseURL:     dbURL,
-		RedisURL:        redisURL,
-		CaddyAdminURL:   caddyAdminURL,
-		BaseDomain:      baseDomain,
-		MasterKey:       masterKey,
-		JWTSecret:       jwtSecret,
-		JWTExpiresIn:    jwtExpiresIn,
-		DockerNetwork:   dockerNetwork,
-		BuildStorageDir: buildStorageDir,
-		Environment:     environment,
-		FrontendURL:     frontendURL,
+		Port:               port,
+		DatabaseURL:        dbURL,
+		RedisURL:           redisURL,
+		CaddyAdminURL:      caddyAdminURL,
+		BaseDomain:         baseDomain,
+		MasterKey:          masterKey,
+		JWTSecret:          jwtSecret,
+		JWTExpiresIn:       jwtExpiresIn,
+		DockerNetwork:      dockerNetwork,
+		BuildStorageDir:    buildStorageDir,
+		Environment:        environment,
+		FrontendURL:        frontendURL,
+		APIBaseURL:         apiBaseURL,
+		PaydunyaMasterKey:  paydunyaMasterKey,
+		PaydunyaPrivateKey: paydunyaPrivateKey,
+		PaydunyaToken:      paydunyaToken,
+		PaydunyaMode:       paydunyaMode,
+		GithubClientID:     githubClientID,
+		GithubClientSecret: githubClientSecret,
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
+		GitlabClientID:     gitlabClientID,
+		GitlabClientSecret: gitlabClientSecret,
 	}
 }
 

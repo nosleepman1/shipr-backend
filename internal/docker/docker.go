@@ -93,6 +93,7 @@ func (c *Client) CreateAndStartContainer(ctx context.Context, cfg ContainerRunCo
 			Name: container.RestartPolicyUnlessStopped,
 		},
 		NetworkMode: container.NetworkMode(netName),
+		SecurityOpt: []string{"no-new-privileges:true"},
 	}
 
 	containerConfig := &container.Config{
@@ -129,6 +130,12 @@ func (c *Client) CreateAndStartContainer(ctx context.Context, cfg ContainerRunCo
 	}
 
 	return resp.ID, nil
+}
+
+// ConnectContainerToNetwork attaches an existing container to an additional network
+func (c *Client) ConnectContainerToNetwork(ctx context.Context, containerID, networkName string) error {
+	_ = c.EnsureNetworkExists(ctx, networkName)
+	return c.cli.NetworkConnect(ctx, networkName, containerID, nil)
 }
 
 // GetContainerIP returns the internal IP address of the container on the target network

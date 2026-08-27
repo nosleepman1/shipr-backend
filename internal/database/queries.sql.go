@@ -1084,3 +1084,351 @@ func (q *Queries) DeleteDomain(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteDomain, id)
 	return err
 }
+
+// ============================================================================
+// OAUTH ACCOUNTS
+// ============================================================================
+
+const upsertAccount = `-- name: UpsertAccount :one
+INSERT INTO accounts (user_id, provider, provider_account_id, access_token, refresh_token, token_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (provider, provider_account_id)
+DO UPDATE SET
+    access_token = EXCLUDED.access_token,
+    refresh_token = EXCLUDED.refresh_token,
+    token_expires_at = EXCLUDED.token_expires_at
+RETURNING id, user_id, provider, provider_account_id, access_token, refresh_token, token_expires_at, created_at
+`
+
+type UpsertAccountParams struct {
+	UserID            uuid.UUID    `json:"user_id"`
+	Provider          AuthProvider `json:"provider"`
+	ProviderAccountID string       `json:"provider_account_id"`
+	AccessToken       *string      `json:"access_token"`
+	RefreshToken      *string      `json:"refresh_token"`
+	TokenExpiresAt    *time.Time   `json:"token_expires_at"`
+}
+
+func (q *Queries) UpsertAccount(ctx context.Context, arg UpsertAccountParams) (Account, error) {
+	row := q.db.QueryRow(ctx, upsertAccount,
+		arg.UserID,
+		arg.Provider,
+		arg.ProviderAccountID,
+		arg.AccessToken,
+		arg.RefreshToken,
+		arg.TokenExpiresAt,
+	)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Provider,
+		&i.ProviderAccountID,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getAccountByProvider = `-- name: GetAccountByProvider :one
+SELECT id, user_id, provider, provider_account_id, access_token, refresh_token, token_expires_at, created_at FROM accounts
+WHERE provider = $1 AND provider_account_id = $2 LIMIT 1
+`
+
+func (q *Queries) GetAccountByProvider(ctx context.Context, provider AuthProvider, providerAccountID string) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByProvider, provider, providerAccountID)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Provider,
+		&i.ProviderAccountID,
+		&i.AccessToken,
+		&i.RefreshToken,
+		&i.TokenExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+// ============================================================================
+// BILLING & PLANS (PAYDUNYA)
+// ============================================================================
+
+const listPlans = `-- name: ListPlans :many
+SELECT id, name, slug, description, price_xof, price_usd, max_applications, max_cpus, max_memory_mb, custom_domains_allowed, is_active, created_at FROM plans
+WHERE is_active = TRUE
+ORDER BY price_xof ASC
+`
+
+func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
+	rows, err := q.db.Query(ctx, listPlans)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Plan
+	for rows.Next() {
+		var i Plan
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.PriceXof,
+			&i.PriceUsd,
+			&i.MaxApplications,
+			&i.MaxCpus,
+			&i.MaxMemoryMb,
+			&i.CustomDomainsAllowed,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPlanBySlug = `-- name: GetPlanBySlug :one
+SELECT id, name, slug, description, price_xof, price_usd, max_applications, max_cpus, max_memory_mb, custom_domains_allowed, is_active, created_at FROM plans
+WHERE slug = $1 LIMIT 1
+`
+
+func (q *Queries) GetPlanBySlug(ctx context.Context, slug string) (Plan, error) {
+	row := q.db.QueryRow(ctx, getPlanBySlug, slug)
+	var i Plan
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.PriceXof,
+		&i.PriceUsd,
+		&i.MaxApplications,
+		&i.MaxCpus,
+		&i.MaxMemoryMb,
+		&i.CustomDomainsAllowed,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getPlanByID = `-- name: GetPlanByID :one
+SELECT id, name, slug, description, price_xof, price_usd, max_applications, max_cpus, max_memory_mb, custom_domains_allowed, is_active, created_at FROM plans
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetPlanByID(ctx context.Context, id uuid.UUID) (Plan, error) {
+	row := q.db.QueryRow(ctx, getPlanByID, id)
+	var i Plan
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.PriceXof,
+		&i.PriceUsd,
+		&i.MaxApplications,
+		&i.MaxCpus,
+		&i.MaxMemoryMb,
+		&i.CustomDomainsAllowed,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const upsertSubscription = `-- name: UpsertSubscription :one
+INSERT INTO subscriptions (
+    workspace_id, plan_id, status, paydunya_invoice_token, current_period_start, current_period_end
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (workspace_id)
+DO UPDATE SET
+    plan_id = EXCLUDED.plan_id,
+    status = EXCLUDED.status,
+    paydunya_invoice_token = EXCLUDED.paydunya_invoice_token,
+    current_period_start = EXCLUDED.current_period_start,
+    current_period_end = EXCLUDED.current_period_end,
+    updated_at = NOW()
+RETURNING id, workspace_id, plan_id, status, paydunya_invoice_token, current_period_start, current_period_end, canceled_at, created_at, updated_at
+`
+
+type UpsertSubscriptionParams struct {
+	WorkspaceID          uuid.UUID          `json:"workspace_id"`
+	PlanID               uuid.UUID          `json:"plan_id"`
+	Status               SubscriptionStatus `json:"status"`
+	PaydunyaInvoiceToken *string            `json:"paydunya_invoice_token"`
+	CurrentPeriodStart   time.Time          `json:"current_period_start"`
+	CurrentPeriodEnd     time.Time          `json:"current_period_end"`
+}
+
+func (q *Queries) UpsertSubscription(ctx context.Context, arg UpsertSubscriptionParams) (Subscription, error) {
+	row := q.db.QueryRow(ctx, upsertSubscription,
+		arg.WorkspaceID,
+		arg.PlanID,
+		arg.Status,
+		arg.PaydunyaInvoiceToken,
+		arg.CurrentPeriodStart,
+		arg.CurrentPeriodEnd,
+	)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PlanID,
+		&i.Status,
+		&i.PaydunyaInvoiceToken,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CanceledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspaceSubscription = `-- name: GetWorkspaceSubscription :one
+SELECT s.id, s.workspace_id, s.plan_id, s.status, s.paydunya_invoice_token, s.current_period_start, s.current_period_end, s.canceled_at, s.created_at, s.updated_at, p.name as plan_name, p.slug as plan_slug, p.max_applications, p.max_cpus, p.max_memory_mb, p.custom_domains_allowed
+FROM subscriptions s
+INNER JOIN plans p ON s.plan_id = p.id
+WHERE s.workspace_id = $1 LIMIT 1
+`
+
+type GetWorkspaceSubscriptionRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	WorkspaceID          uuid.UUID          `json:"workspace_id"`
+	PlanID               uuid.UUID          `json:"plan_id"`
+	Status               SubscriptionStatus `json:"status"`
+	PaydunyaInvoiceToken *string            `json:"paydunya_invoice_token"`
+	CurrentPeriodStart   time.Time          `json:"current_period_start"`
+	CurrentPeriodEnd     time.Time          `json:"current_period_end"`
+	CanceledAt           *time.Time         `json:"canceled_at"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
+	PlanName             string             `json:"plan_name"`
+	PlanSlug             string             `json:"plan_slug"`
+	MaxApplications      int32              `json:"max_applications"`
+	MaxCpus              pgtype.Numeric     `json:"max_cpus"`
+	MaxMemoryMb          int32              `json:"max_memory_mb"`
+	CustomDomainsAllowed bool               `json:"custom_domains_allowed"`
+}
+
+func (q *Queries) GetWorkspaceSubscription(ctx context.Context, workspaceID uuid.UUID) (GetWorkspaceSubscriptionRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceSubscription, workspaceID)
+	var i GetWorkspaceSubscriptionRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PlanID,
+		&i.Status,
+		&i.PaydunyaInvoiceToken,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CanceledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PlanName,
+		&i.PlanSlug,
+		&i.MaxApplications,
+		&i.MaxCpus,
+		&i.MaxMemoryMb,
+		&i.CustomDomainsAllowed,
+	)
+	return i, err
+}
+
+const createPayment = `-- name: CreatePayment :one
+INSERT INTO payments (
+    workspace_id, subscription_id, paydunya_invoice_token, amount_xof, status
+)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, workspace_id, subscription_id, paydunya_invoice_token, paydunya_receipt_url, amount_xof, payment_method, customer_phone, status, paid_at, created_at
+`
+
+func (q *Queries) CreatePayment(ctx context.Context, workspaceID uuid.UUID, subscriptionID *uuid.UUID, token string, amount int32, status PaymentStatus) (Payment, error) {
+	row := q.db.QueryRow(ctx, createPayment,
+		workspaceID,
+		subscriptionID,
+		token,
+		amount,
+		status,
+	)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubscriptionID,
+		&i.PaydunyaInvoiceToken,
+		&i.PaydunyaReceiptUrl,
+		&i.AmountXof,
+		&i.PaymentMethod,
+		&i.CustomerPhone,
+		&i.Status,
+		&i.PaidAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updatePaymentStatus = `-- name: UpdatePaymentStatus :one
+UPDATE payments
+SET status = $2,
+    paydunya_receipt_url = COALESCE($3, paydunya_receipt_url),
+    payment_method = COALESCE($4, payment_method),
+    customer_phone = COALESCE($5, customer_phone),
+    paid_at = CASE WHEN $2 = 'completed'::payment_status THEN NOW() ELSE paid_at END
+WHERE paydunya_invoice_token = $1
+RETURNING id, workspace_id, subscription_id, paydunya_invoice_token, paydunya_receipt_url, amount_xof, payment_method, customer_phone, status, paid_at, created_at
+`
+
+func (q *Queries) UpdatePaymentStatus(ctx context.Context, token string, status PaymentStatus, receiptURL, method, phone *string) (Payment, error) {
+	row := q.db.QueryRow(ctx, updatePaymentStatus, token, status, receiptURL, method, phone)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubscriptionID,
+		&i.PaydunyaInvoiceToken,
+		&i.PaydunyaReceiptUrl,
+		&i.AmountXof,
+		&i.PaymentMethod,
+		&i.CustomerPhone,
+		&i.Status,
+		&i.PaidAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getPaymentByInvoiceToken = `-- name: GetPaymentByInvoiceToken :one
+SELECT id, workspace_id, subscription_id, paydunya_invoice_token, paydunya_receipt_url, amount_xof, payment_method, customer_phone, status, paid_at, created_at FROM payments
+WHERE paydunya_invoice_token = $1 LIMIT 1
+`
+
+func (q *Queries) GetPaymentByInvoiceToken(ctx context.Context, token string) (Payment, error) {
+	row := q.db.QueryRow(ctx, getPaymentByInvoiceToken, token)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubscriptionID,
+		&i.PaydunyaInvoiceToken,
+		&i.PaydunyaReceiptUrl,
+		&i.AmountXof,
+		&i.PaymentMethod,
+		&i.CustomerPhone,
+		&i.Status,
+		&i.PaidAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}

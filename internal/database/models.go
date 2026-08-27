@@ -269,3 +269,63 @@ type Domain struct {
 	SslStatus     *string   `json:"ssl_status,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+type SubscriptionStatus string
+
+const (
+	SubscriptionStatusActive   SubscriptionStatus = "active"
+	SubscriptionStatusPastDue  SubscriptionStatus = "past_due"
+	SubscriptionStatusCanceled SubscriptionStatus = "canceled"
+	SubscriptionStatusTrialing SubscriptionStatus = "trialing"
+)
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPending   PaymentStatus = "pending"
+	PaymentStatusCompleted PaymentStatus = "completed"
+	PaymentStatusFailed    PaymentStatus = "failed"
+	PaymentStatusRefunded  PaymentStatus = "refunded"
+)
+
+type Plan struct {
+	ID                    uuid.UUID      `json:"id"`
+	Name                  string         `json:"name"`
+	Slug                  string         `json:"slug"`
+	Description           *string        `json:"description,omitempty"`
+	PriceXof              int32          `json:"price_xof"`
+	PriceUsd              pgtype.Numeric `json:"price_usd"`
+	MaxApplications       int32          `json:"max_applications"`
+	MaxCpus               pgtype.Numeric `json:"max_cpus"`
+	MaxMemoryMb           int32          `json:"max_memory_mb"`
+	CustomDomainsAllowed  bool           `json:"custom_domains_allowed"`
+	IsActive              bool           `json:"is_active"`
+	CreatedAt             time.Time      `json:"created_at"`
+}
+
+type Subscription struct {
+	ID                   uuid.UUID          `json:"id"`
+	WorkspaceID          uuid.UUID          `json:"workspace_id"`
+	PlanID               uuid.UUID          `json:"plan_id"`
+	Status               SubscriptionStatus `json:"status"`
+	PaydunyaInvoiceToken *string            `json:"paydunya_invoice_token,omitempty"`
+	CurrentPeriodStart   time.Time          `json:"current_period_start"`
+	CurrentPeriodEnd     time.Time          `json:"current_period_end"`
+	CanceledAt           *time.Time         `json:"canceled_at,omitempty"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
+}
+
+type Payment struct {
+	ID                   uuid.UUID     `json:"id"`
+	WorkspaceID          uuid.UUID     `json:"workspace_id"`
+	SubscriptionID       *uuid.UUID    `json:"subscription_id,omitempty"`
+	PaydunyaInvoiceToken string        `json:"paydunya_invoice_token"`
+	PaydunyaReceiptUrl   *string       `json:"paydunya_receipt_url,omitempty"`
+	AmountXof            int32         `json:"amount_xof"`
+	PaymentMethod        *string       `json:"payment_method,omitempty"`
+	CustomerPhone        *string       `json:"customer_phone,omitempty"`
+	Status               PaymentStatus `json:"status"`
+	PaidAt               *time.Time    `json:"paid_at,omitempty"`
+	CreatedAt            time.Time     `json:"created_at"`
+}
