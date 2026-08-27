@@ -44,8 +44,8 @@ func Load() *Config {
 	_ = godotenv.Load("../.env")
 
 	port := getEnv("PORT", "8080")
-	dbURL := getEnv("DATABASE_URL", "postgres://shipr:shipr_secret_password@localhost:5432/shipr?sslmode=disable")
-	redisURL := getEnv("REDIS_URL", "redis://localhost:6379")
+	dbURL := getEnv("DATABASE_URL", "postgres://shipr:shipr_secret_password@127.0.0.1:5432/shipr?sslmode=disable")
+	redisURL := getEnv("REDIS_URL", "redis://127.0.0.1:6379")
 	caddyAdminURL := getEnv("CADDY_ADMIN_URL", "http://localhost:2019")
 	baseDomain := getEnv("BASE_DOMAIN", "shipr.local")
 	masterKey := getEnv("CLOUDBOX_MASTER_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")

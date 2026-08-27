@@ -33,5 +33,24 @@ func NewPool(ctx context.Context, connString string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, err
 	}
+	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		typeNames := []string{
+			"user_role",
+			"auth_provider",
+			"workspace_role",
+			"build_pack_type",
+			"deployment_status",
+			"trigger_source",
+			"subscription_status",
+			"payment_status",
+		}
+		for _, typeName := range typeNames {
+			dataType, err := conn.LoadType(ctx, typeName)
+			if err == nil {
+				conn.TypeMap().RegisterType(dataType)
+			}
+		}
+		return nil
+	}
 	return pgxpool.NewWithConfig(ctx, config)
 }

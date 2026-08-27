@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -70,7 +71,8 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		SystemRole:   &defaultRole,
 	})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+		log.Printf("[AUTH ERROR] CreateUser failed: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user: " + err.Error()})
 	}
 
 	// Create default personal workspace for the user
@@ -80,7 +82,9 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		Slug:    workspaceSlug + "-" + user.ID.String()[:4],
 		OwnerID: user.ID,
 	})
-	if err == nil {
+	if err != nil {
+		log.Printf("[AUTH ERROR] CreateWorkspace failed: %v", err)
+	} else {
 		_, _ = h.db.AddWorkspaceMember(c.Context(), workspace.ID, user.ID, database.WorkspaceRoleOwner)
 	}
 
