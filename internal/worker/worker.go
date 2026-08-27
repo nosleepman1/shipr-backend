@@ -213,9 +213,15 @@ func (w *Worker) ProcessDeployTask(ctx context.Context, t *asynq.Task) error {
 	_, _ = w.db.UpdateDeploymentStatus(ctx, deploymentID, database.DeploymentStatusBuilding)
 	imageTag := fmt.Sprintf("shipr-%s:%s", appID.String()[:8], shortHash)
 
-	dockerfilePath := filepath.Join(buildDir, "Dockerfile")
+	// Support for monorepo subdirectories (base_directory)
+	targetBuildDir := buildDir
+	if app.BaseDirectory != nil && *app.BaseDirectory != "" && *app.BaseDirectory != "/" {
+		targetBuildDir = filepath.Join(buildDir, *app.BaseDirectory)
+	}
+
+	dockerfilePath := filepath.Join(targetBuildDir, "Dockerfile")
 	if app.DockerfilePath != nil && *app.DockerfilePath != "" {
-		dockerfilePath = filepath.Join(buildDir, *app.DockerfilePath)
+		dockerfilePath = filepath.Join(targetBuildDir, *app.DockerfilePath)
 	}
 
 	hasDockerfile := false
@@ -225,16 +231,22 @@ func (w *Worker) ProcessDeployTask(ctx context.Context, t *asynq.Task) error {
 
 	var buildCmd *exec.Cmd
 	if hasDockerfile || app.BuildPack == database.BuildPackTypeDockerfile {
-		logger.Log("stdout", "🐳 Dockerfile detected. Building with docker...")
-		buildCmd = exec.CommandContext(ctx, "docker", "build", "-t", imageTag, buildDir)
+		logger.Log("stdout", "🐳 Dockerfile detected. Building with Docker engine...")
+		buildCmd = exec.CommandContext(ctx, "docker", "build", "-t", imageTag, targetBuildDir)
 	} else {
-		// Try Nixpacks CLI first
+		// 1. Try local Nixpacks CLI if available
 		if _, err := exec.LookPath("nixpacks"); err == nil {
-			logger.Log("stdout", "📦 Building with Nixpacks...")
-			buildCmd = exec.CommandContext(ctx, "nixpacks", "build", buildDir, "--name", imageTag)
+			logger.Log("stdout", "📦 Building with native Nixpacks CLI (Zero-Config auto-detect)...")
+			buildCmd = exec.CommandContext(ctx, "nixpacks", "build", targetBuildDir, "--name", imageTag)
 		} else {
-			logger.Log("stdout", "⚠️ Nixpacks CLI not found on host, falling back to docker build...")
-			buildCmd = exec.CommandContext(ctx, "docker", "build", "-t", imageTag, buildDir)
+			// 2. Fallback to Docker image builder or docker build
+			logger.Log("stdout", "📦 Nixpacks CLI not in PATH. Using Nixpacks Docker Engine container...")
+			absPath, _ := filepath.Abs(targetBuildDir)
+			buildCmd = exec.CommandContext(ctx, "docker", "run", "--rm",
+				"-v", "/var/run/docker.sock:/var/run/docker.sock",
+				"-v", fmt.Sprintf("%s:/workspace:ro", absPath),
+				"ghcr.io/railwayapp/nixpacks:latest", "build", "/workspace", "--name", imageTag,
+			)
 		}
 	}
 

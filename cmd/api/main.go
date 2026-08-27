@@ -35,6 +35,11 @@ func main() {
 		log.Fatalf("[FATAL] Could not connect to PostgreSQL: %v", err)
 	}
 	defer pool.Close()
+
+	if err := database.AutoMigrate(ctx, pool); err != nil {
+		log.Printf("[WARN] Auto-migration warning: %v", err)
+	}
+
 	db := database.New(pool)
 	log.Printf("[INFO] Connected to PostgreSQL successfully.")
 
